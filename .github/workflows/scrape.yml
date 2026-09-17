@@ -50,6 +50,10 @@ jobs:
           MIN_EXPECTED_PRODUCTS: "100"
         run: python -m scraper.shopstar_bombas_millas_v2
 
+      - name: Diagnóstico de carga de catálogo
+        if: failure()
+        run: python -m scraper.diagnose_catalog
+
       - name: Validar salida
         run: |
           python - <<'PY'
