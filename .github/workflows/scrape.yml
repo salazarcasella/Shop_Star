@@ -1,11 +1,15 @@
-name: Diagnosticar Bombas Millas
+name: Actualizar Bombas Millas
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "15 13 * * *" # 08:15 America/Lima
   push:
     branches: [main]
     paths:
       - "scraper/**"
+      - "tests/**"
+      - "requirements.txt"
       - ".github/workflows/scrape.yml"
 
 permissions:
@@ -16,9 +20,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  diagnose:
+  scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,16 +36,39 @@ jobs:
       - name: Dependencias Python
         run: pip install -r requirements.txt
 
+      - name: Tests
+        run: python -m unittest discover -s tests -v
+
       - name: Chromium para Playwright
         run: playwright install --with-deps chromium
 
-      - name: Diagnóstico Shopstar
-        run: python -m scraper.diagnose_catalog
+      - name: Extraer catálogo completo
+        env:
+          MIN_EXPECTED_PRODUCTS: "100"
+          MIN_CATALOG_COVERAGE: "0.95"
+          MIN_RATIO_COVERAGE: "0.70"
+          DETAIL_CONCURRENCY: "6"
+          DETAIL_LIMIT: "300"
+        run: python -m scraper.shopstar_bombas_millas_v2
 
-      - name: Guardar diagnóstico
+      - name: Mostrar calidad de extracción
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("data/latest.json").read_text(encoding="utf-8"))
+          m = data["metadata"]
+          print(f"Productos: {m['product_count']} / declarado: {m.get('declared_product_total')}")
+          print(f"Con precio: {m.get('products_with_price')}")
+          print(f"Con millas: {m.get('products_with_miles')}")
+          print(f"Con ratio: {m.get('products_with_ratio')} ({m.get('ratio_coverage', 0):.1%})")
+          print(f"Clicks Mostrar más que crecieron: {m.get('show_more_growth_clicks')}")
+          PY
+
+      - name: Guardar datos
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/diagnostic_catalog.json
-          git diff --cached --quiet || git commit -m "debug: actualizar diagnóstico catálogo [skip ci]"
+          git add data/latest.json data/history.json
+          git diff --cached --quiet || git commit -m "data: actualizar catálogo Bombas Millas [skip ci]"
           git push
