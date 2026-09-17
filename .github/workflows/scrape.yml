@@ -1,0 +1,73 @@
+name: Actualizar Bombas Millas
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 13 * * *" # 08:15 America/Lima
+  push:
+    branches: [main]
+    paths:
+      - "scraper/**"
+      - "tests/**"
+      - "requirements.txt"
+      - ".github/workflows/scrape.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: shopstar-bombas-millas
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Dependencias Python
+        run: pip install -r requirements.txt
+
+      - name: Chromium para Playwright
+        run: playwright install --with-deps chromium
+
+      - name: Tests de parsers
+        run: python -m unittest discover -s tests -v
+
+      - name: Scraping Shopstar Bombas Millas
+        env:
+          HEADLESS: "1"
+          DETAIL_CONCURRENCY: "4"
+          DETAIL_LIMIT: "250"
+        run: python scraper/shopstar_bombas_millas.py
+
+      - name: Validar salida
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = json.loads(Path('data/latest.json').read_text(encoding='utf-8'))
+          m = p['metadata']
+          assert m['product_count'] > 0, m
+          print(json.dumps(m, ensure_ascii=False, indent=2))
+          PY
+
+      - name: Guardar JSON actualizado en GitHub
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/latest.json data/history.json
+          if git diff --cached --quiet; then
+            echo "Sin cambios de datos"
+          else
+            git commit -m "data: actualizar Bombas Millas [skip ci]"
+            git push
+          fi
