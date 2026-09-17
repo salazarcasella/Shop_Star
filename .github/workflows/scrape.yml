@@ -1,28 +1,24 @@
-name: Actualizar Bombas Millas
+name: Diagnosticar Bombas Millas
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "15 13 * * *" # 08:15 America/Lima
   push:
     branches: [main]
     paths:
       - "scraper/**"
-      - "tests/**"
-      - "requirements.txt"
       - ".github/workflows/scrape.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: shopstar-bombas-millas
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
-  scrape:
+  diagnose:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,41 +35,5 @@ jobs:
       - name: Chromium para Playwright
         run: playwright install --with-deps chromium
 
-      - name: Tests de parsers
-        run: python -m unittest discover -s tests -v
-
-      - name: Scraping Shopstar Bombas Millas
-        env:
-          HEADLESS: "1"
-          DETAIL_CONCURRENCY: "6"
-          DETAIL_LIMIT: "300"
-          MIN_EXPECTED_PRODUCTS: "100"
-        run: python -m scraper.shopstar_bombas_millas_v2
-
-      - name: Diagnóstico de carga de catálogo
-        if: failure()
+      - name: Diagnóstico Shopstar
         run: python -m scraper.diagnose_catalog
-
-      - name: Validar salida
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          p = json.loads(Path('data/latest.json').read_text(encoding='utf-8'))
-          m = p['metadata']
-          assert m['product_count'] >= 100, m
-          assert m['products_with_miles'] > 0, m
-          print(json.dumps(m, ensure_ascii=False, indent=2))
-          PY
-
-      - name: Guardar JSON actualizado en GitHub
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/latest.json data/history.json
-          if git diff --cached --quiet; then
-            echo "Sin cambios de datos"
-          else
-            git commit -m "data: actualizar Bombas Millas [skip ci]"
-            git push
-          fi
