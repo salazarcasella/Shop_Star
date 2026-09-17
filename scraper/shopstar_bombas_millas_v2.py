@@ -4,7 +4,6 @@ import asyncio
 import json
 import math
 import os
-import re
 from copy import deepcopy
 from typing import Any
 
@@ -12,16 +11,16 @@ from playwright.async_api import BrowserContext, Page, async_playwright
 
 from .shopstar_bombas_millas import (
     SOURCE_URL,
-    build_dom_only_product,
-    clean_text,
+    clean as clean_text,
     extract_miles_values,
     extract_soles_values,
-    finalize_product,
-    iter_product_nodes,
-    merge_dom_data,
-    normalize_network_product,
-    product_path_key,
-    utc_now_iso,
+    finalize as finalize_product,
+    from_dom as build_dom_only_product,
+    merge_dom as merge_dom_data,
+    normalize_network as normalize_network_product,
+    now_iso as utc_now_iso,
+    product_nodes as iter_product_nodes,
+    url_key as product_path_key,
     write_outputs,
 )
 
@@ -229,7 +228,7 @@ async def scrape() -> dict[str, Any]:
         'detail_errors':sum(1 for p in products if p.get('detail_error')),
         'ratio_definition':'soles_per_mile = current cash price in PEN / displayed Benefit miles',
         'best_ratio_rule':'Higher soles_per_mile (or soles_per_1000_miles) means more PEN value extracted per Benefit mile.',
-        'scraper_version':'2.0.0'
+        'scraper_version':'2.0.1'
     }
     return {'metadata':meta,'products':products}
 
