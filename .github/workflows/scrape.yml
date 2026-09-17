@@ -9,7 +9,7 @@ on:
       - ".github/workflows/scrape.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: shopstar-bombas-millas
@@ -37,3 +37,11 @@ jobs:
 
       - name: Diagnóstico Shopstar
         run: python -m scraper.diagnose_catalog
+
+      - name: Guardar diagnóstico
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/diagnostic_catalog.json
+          git diff --cached --quiet || git commit -m "debug: actualizar diagnóstico catálogo [skip ci]"
+          git push
