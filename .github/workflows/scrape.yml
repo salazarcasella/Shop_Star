@@ -46,23 +46,53 @@ jobs:
         env:
           MIN_EXPECTED_PRODUCTS: "100"
           MIN_CATALOG_COVERAGE: "0.95"
-          MIN_RATIO_COVERAGE: "0.70"
+          MIN_RATIO_COVERAGE: "0.00"
           DETAIL_CONCURRENCY: "6"
           DETAIL_LIMIT: "300"
         run: python -m scraper.shopstar_bombas_millas_v2
 
-      - name: Mostrar calidad de extracción
+      - name: Diagnosticar calidad de extracción
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
           data = json.loads(Path("data/latest.json").read_text(encoding="utf-8"))
           m = data["metadata"]
+          products = data["products"]
+          missing_price = [p for p in products if not p.get("price_soles")]
+          missing_miles = [p for p in products if not p.get("miles_benefit")]
+          missing_ratio = [p for p in products if p.get("soles_per_mile") is None]
           print(f"Productos: {m['product_count']} / declarado: {m.get('declared_product_total')}")
           print(f"Con precio: {m.get('products_with_price')}")
           print(f"Con millas: {m.get('products_with_miles')}")
           print(f"Con ratio: {m.get('products_with_ratio')} ({m.get('ratio_coverage', 0):.1%})")
-          print(f"Clicks Mostrar más que crecieron: {m.get('show_more_growth_clicks')}")
+          print(f"Network capturados: {m.get('network_products_captured')} / merged: {m.get('network_products_merged')}")
+          print(f"Detail solicitados: {m.get('detail_pages_requested')} / enriquecidos: {m.get('detail_pages_enriched')} / errores: {m.get('detail_errors')}")
+          print(f"Faltan precio: {len(missing_price)} | faltan millas: {len(missing_miles)} | faltan ratio: {len(missing_ratio)}")
+          print("\nMUESTRA SIN PRECIO:")
+          for p in missing_price[:20]:
+              print(json.dumps({k: p.get(k) for k in ('name','url','sku_id','miles_benefit','price_soles','price_source','detail_error','detail_text_excerpt')}, ensure_ascii=False))
+          print("\nMUESTRA SIN MILLAS:")
+          for p in missing_miles[:20]:
+              print(json.dumps({k: p.get(k) for k in ('name','url','sku_id','miles_benefit','price_soles','miles_source','detail_error','detail_text_excerpt')}, ensure_ascii=False))
+          PY
+
+      - name: Validar calidad antes de publicar
+        run: |
+          python - <<'PY'
+          import json, math
+          from pathlib import Path
+          data = json.loads(Path("data/latest.json").read_text(encoding="utf-8"))
+          m = data["metadata"]
+          count = int(m.get("product_count") or 0)
+          declared = int(m.get("declared_product_total") or 0)
+          required = max(100, math.ceil(declared * 0.95)) if declared else 100
+          ratio = float(m.get("ratio_coverage") or 0)
+          if count < required:
+              raise SystemExit(f"Catálogo incompleto: {count} productos; mínimo requerido {required}.")
+          if ratio < 0.70:
+              raise SystemExit(f"Datos incompletos: cobertura precio+millas {ratio:.1%}; mínimo requerido 70%.")
+          print("Quality gate OK")
           PY
 
       - name: Guardar datos
